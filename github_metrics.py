@@ -222,7 +222,52 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
             continue
 
         cache_comment = f'{repo_name}\n'
+        
         addition_total, deletion_total, my_commits = recursive_loc(USER_NAME, repo_name, data, cache_comment)
         loc_add += addition_total
         loc_del += deletion_total
+    with open(filename, 'w') as f:
+        f.write(data)
+
+    return loc_add, loc_del
+
+def stars_counter(repositories):
+    """
+    Counts the total number of stars for all repositories.
+    """
+    total_stars = 0
+    for repo in repositories:
+        total_stars += repo['node']['stargazers']['totalCount']
+    return total_stars
+
+def query_count(query_name):
+    """
+    Increments the query count for each type of request.
+    """
+    if query_name in QUERY_COUNT:
+        QUERY_COUNT[query_name] += 1
+
+def force_close_file(data, cache_comment):
+    """
+    Force closes the file and saves the current state of data.
+    """
+    with open('cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt', 'w') as f:
+        f.write(data + cache_comment)
+
+if __name__ == "__main__":
+    # Example usage of the functions
+    birthday = datetime.datetime(1990, 1, 1)  # Replace with actual birthday
+    print(daily_readme(birthday))
+    
+    start_date = datetime.datetime(2024, 1, 1).isoformat()
+    end_date = datetime.datetime(2024, 8, 15).isoformat()
+    print(f"Total commits from {start_date} to {end_date}: {graph_commits(start_date, end_date)}")
+
+    owner_affiliation = ["OWNER"]
+    print(f"Total repositories: {graph_repos_stars('repos', owner_affiliation)}")
+    print(f"Total stars: {graph_repos_stars('stars', owner_affiliation)}")
+
+    loc_add, loc_del = loc_query(owner_affiliation)
+    print(f"Lines of code added: {loc_add}")
+    print(f"Lines of code deleted: {loc_del}")
 

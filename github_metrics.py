@@ -2,15 +2,10 @@ import datetime
 from dateutil import relativedelta
 import requests
 import os
-from xml.dom import minidom
-import time
 import hashlib
 
 # Fine-grained personal access token with All Repositories access:
-# Account permissions: read:Followers, read:Starring, read:Watching
-# Repository permissions: read:Commit statuses, read:Contents, read:Issues, read:Metadata, read:Pull Requests
-# Issues and pull requests permissions not needed at the moment, but may be used in the future
-HEADERS = {'authorization': 'token '+ os.environ['GITHUB_TOKEN']}
+HEADERS = {'authorization': 'token ' + os.environ['GITHUB_TOKEN']}
 USER_NAME = 'Adv0_23'
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
 
@@ -41,7 +36,7 @@ def simple_request(func_name, query, variables):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables': variables}, headers=HEADERS)
     if request.status_code == 200:
         return request
     raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
@@ -61,11 +56,11 @@ def graph_commits(start_date, end_date):
             }
         }
     }'''
-    variables = {'start_date': start_date,'end_date': end_date, 'login': USER_NAME}
+    variables = {'start_date': start_date, 'end_date': end_date, 'login': USER_NAME}
     request = simple_request(graph_commits.__name__, query, variables)
     return int(request.json()['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions'])
 
-def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del_loc=0):
+def graph_repos_stars(count_type, owner_affiliation, cursor=None):
     """
     Uses GitHub's GraphQL v4 API to return my total repository, star, or lines of code count.
     """
@@ -138,12 +133,13 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
         }
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables': variables}, headers=HEADERS)
     if request.status_code == 200:
-        if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
+        if request.json()['data']['repository']['defaultBranchRef'] is not None:
             return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
-        else: return 0
-    force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
+        else: 
+            return 0
+    force_close_file(data, cache_comment)
     if request.status_code == 403:
         raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
     raise Exception('recursive_loc() has failed with a', request.status_code, request.text, QUERY_COUNT)
@@ -161,7 +157,8 @@ def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, additio
 
     if history['edges'] == [] or not history['pageInfo']['hasNextPage']:
         return addition_total, deletion_total, my_commits
-    else: return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, history['pageInfo']['endCursor'])
+    else: 
+        return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, history['pageInfo']['endCursor'])
 
 def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None, edges=[]):
     """
@@ -200,8 +197,8 @@ def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None,
     }'''
     variables = {'owner_affiliation': owner_affiliation, 'login': USER_NAME, 'cursor': cursor}
     request = simple_request(loc_query.__name__, query, variables)
-    if request.json()['data']['user']['repositories']['pageInfo']['hasNextPage']:   # If repository data has another page
-        edges += request.json()['data']['user']['repositories']['edges']            # Add on to the LoC count
+    if request.json()['data']['user']['repositories']['pageInfo']['hasNextPage']:
+        edges += request.json()['data']['user']['repositories']['edges']
         return loc_query(owner_affiliation, comment_size, force_cache, request.json()['data']['user']['repositories']['pageInfo']['endCursor'], edges)
     else:
         return cache_builder(edges + request.json()['data']['user']['repositories']['edges'], comment_size, force_cache)
@@ -211,8 +208,21 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
     Checks each repository in edges to see if it has been updated since the last time it was cached
     If it has, run recursive_loc on that repository to update the LOC count
     """
-    cached = True # Assume all repositories are cached
-    filename = 'cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt' # Create a unique filename for each user
+    cached = True
+    filename = 'cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt'
     try:
         with open(filename, 'r') as f:
-            data
+            data = f.read()
+    except FileNotFoundError:
+        data = ''
+
+    for repo in edges:
+        repo_name = repo['node']['nameWithOwner']
+        if not force_cache and repo_name in data:
+            continue
+
+        cache_comment = f'{repo_name}\n'
+        addition_total, deletion_total, my_commits = recursive_loc(USER_NAME, repo_name, data, cache_comment)
+        loc_add += addition_total
+        loc_del += deletion_total
+

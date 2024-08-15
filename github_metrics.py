@@ -10,7 +10,7 @@ import hashlib
 # Account permissions: read:Followers, read:Starring, read:Watching
 # Repository permissions: read:Commit statuses, read:Contents, read:Issues, read:Metadata, read:Pull Requests
 # Issues and pull requests permissions not needed at the moment, but may be used in the future
-HEADERS = {'authorization': 'token '+ os.environ['T_C']}
+HEADERS = {'authorization': 'token '+ os.environ['GITHUB_TOKEN']}
 USER_NAME = 'Adv0_23'
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
 
